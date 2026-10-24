@@ -326,8 +326,11 @@ def swagger_html(
 ) -> str:
     """A self-contained Swagger UI page (assets from a public CDN).
 
-    The page states where the OpenAPI document and the agent brief live, so it is
-    still useful when the CDN is unreachable behind a restricted network.
+    Swagger UI keeps its own stock styling — this page deliberately does not
+    override colours, fonts or components (only a thin navigation strip is added
+    above it), so the reference looks and behaves exactly like upstream Swagger
+    UI. The strip points at the OpenAPI document and the agent brief and still
+    explains where they are when the CDN is unreachable.
     """
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -337,16 +340,20 @@ def swagger_html(
 <title>{title}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
 <style>
-  body {{ margin: 0; background: #0b0e13; color: #e6e9ef;
-         font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }}
+  /* Only the strip above the UI is styled; everything inside #swagger-ui is
+     left to swagger-ui.css untouched. */
+  body {{ margin: 0; }}
   .litegm-bar {{ display: flex; flex-wrap: wrap; gap: .75rem; align-items: center;
-                padding: .7rem 1rem; background: #12161d; border-bottom: 1px solid #1f2530; }}
-  .litegm-bar a {{ color: #9ecbff; text-decoration: none; font-size: .82rem; }}
+                padding: .55rem 1rem; font: 13px/1.4 -apple-system, "Segoe UI", Roboto,
+                Helvetica, Arial, sans-serif; color: #3b4151; background: #fafafa;
+                border-bottom: 1px solid #d8dde7; }}
+  .litegm-bar a {{ color: #4990e2; text-decoration: none; }}
   .litegm-bar a:hover {{ text-decoration: underline; }}
   .litegm-bar .spacer {{ flex: 1; }}
-  .litegm-note {{ font-size: .75rem; color: #8b93a3; }}
-  #swagger-ui .topbar {{ display: none; }}
-  .litegm-fallback {{ padding: 1rem 1.25rem; font-size: .8rem; color: #8b93a3; }}
+  .litegm-bar .litegm-note {{ color: #6b7280; font-size: 12px; }}
+  .litegm-fallback {{ padding: .75rem 1rem; font: 12px/1.5 -apple-system, "Segoe UI",
+                     Roboto, Helvetica, Arial, sans-serif; color: #6b7280;
+                     background: #fafafa; }}
 </style>
 </head>
 <body>
@@ -378,7 +385,7 @@ def swagger_html(
       tryItOutEnabled: true,
       presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
       plugins: [SwaggerUIBundle.plugins.DownloadUrl],
-      layout: "StandaloneLayout"
+      layout: "BaseLayout"
     }});
   }});
 </script>
