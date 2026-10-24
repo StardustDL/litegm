@@ -32,7 +32,11 @@ WORKDIR /app
 # Create the environment from the committed lock file (default environment).
 # ffmpeg/ffprobe are part of that environment (see pyproject.toml), so the admin
 # console can extract video first frames and probe media without extra packages.
-COPY pixi.lock pyproject.toml ./
+# README.md and LICENSE must be copied too: pyproject.toml declares
+# ``readme = "README.md"`` and ``license-files = ["LICENSE"]``, and hatchling
+# validates both while building the editable ``litegm`` wheel, so omitting them
+# fails the build with "Readme file does not exist: README.md".
+COPY pixi.lock pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 RUN pixi install --locked --environment default \
  && pixi run --environment default ffmpeg -version \
