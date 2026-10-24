@@ -20,6 +20,9 @@ web/node_modules/
 web/dist/
 web/tsconfig.tsbuildinfo
 
+# full-resolution screenshot originals; the README uses the WebP copies
+docs/assets/admin/*.png
+
 # Python bytecode
 __pycache__/
 *.pyc
