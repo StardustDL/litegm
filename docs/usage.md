@@ -231,6 +231,36 @@ docker compose up -d --build
 sudo chown -R 10001:10001 ./data ./.config
 ```
 
+### 首次部署：先修正 `./data` 属主
+
+**这是首次部署最常见的一步失败**。容器以 UID 10001 运行，而 bind-mount 会把宿主机的
+`./data` 原样覆盖到 `/app/data`，镜像构建阶段的 `chown` 对它无效。若宿主机目录属主不是
+10001（由 root 创建、或 docker 自动创建），启动时就会在 `TaskStore` 初始化处失败：
+
+```
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) unable to open database file
+  ... src/litegm/app.py, TaskStore(config.storage_root() / "litegm.db")
+```
+
+`docker-entrypoint.sh` 在以 root 启动时会尝试自动修正，但若容器以非 root 启动（compose
+`user:` 覆盖、或 `setpriv` 在基础镜像中不可用），这一步不会生效，容器会反复
+`exited with code 2 (restarting)`。此时在宿主机上手动修正即可（目录在 `.gitignore` 中，
+不涉及仓库内容）：
+
+```bash
+cd ~/envs/litegm
+mkdir -p data .config
+sudo chown -R 10001:10001 data .config
+docker compose up -d
+```
+
+排查时可确认容器内的实际属主：
+
+```bash
+docker run --rm --entrypoint sh -v "$PWD/data:/app/data" litegm:latest \
+  -c 'id; ls -ld /app/data; touch /app/data/.probe && echo WRITABLE || echo NOT-WRITABLE'
+```
+
 若 Docker Hub 拉取受限，可用镜像加速器构建：
 
 ```powershell
