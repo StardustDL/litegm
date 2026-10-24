@@ -127,6 +127,30 @@ OpenAI SDK 也可直接使用 `client.images.generate` / `client.images.edit`，
 * 编辑模型的输出画布跟随输入图，`size` 仅作建议。
 * 每个任务都会记录实际提交的 workflow 快照与事件，管理台可查看。
 
+### 5.1 把服务接入 agent 环境
+
+网关自带面向 agent/开发者的发现文档，**拿到链接即可自助接入**：
+
+| 端点 | 用途 |
+|---|---|
+| `GET /llms.txt` | Markdown 接入说明，内容按当前生效配置生成（真实别名、尺寸/时长约束、鉴权、curl 与 SDK 示例、异步轮询、错误码） |
+| `GET /swagger-ui`（`/docs` 同义） | Swagger UI；点 Authorize 填入 master key 后可直接在浏览器试调用 |
+| `GET /openapi.json` | OpenAPI 3 文档，可据此生成客户端或工具定义 |
+
+三者均无需 Bearer，响应中也不含 master key。接入方式：
+
+1. 把 `http://<网关地址>:8080/llms.txt` 作为上下文交给 agent（例如在 Claude Code、
+   Cursor 等工具中直接粘贴该链接，或写入项目说明），agent 会先读它，再调用
+   `GET /v1/models` 确认别名。
+2. 把 `base_url=http://<网关地址>:8080/v1` 与 master key 配置为该 agent 的 OpenAI 兼容
+   客户端（很多 agent 框架支持自定义 OpenAI base_url）；需要工具定义时用
+   `/openapi.json` 导入。
+3. 管理台顶栏的「API 文档」与「llms.txt」按钮可打开文档或一键复制接入链接。
+
+安全提示：`/llms.txt`、`/swagger-ui` 只暴露结构与别名，不暴露密钥；**master key 仍需
+单独提供给 agent**（等同于全部生成权限）。公网部署时建议仅在反向代理层放行
+`/llms.txt`、`/swagger-ui`、`/openapi.json`，其余 `/v1/*` 继续要求 Bearer。
+
 ## 6. 测试
 
 ```powershell

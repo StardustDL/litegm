@@ -23,7 +23,8 @@ React 管理台）。**所有与具体 ComfyUI 服务器相关的东西（地址
 | 任务 | 先读 |
 |---|---|
 | 改配置/加模型 | `.config/litegm.yaml`（真实）与 `config/litegm.yaml`（示例）、`docs/api.md`、`src/litegm/config.py` |
-| 改协议/接口 | `src/litegm/api.py`、`video.py`、`audio.py`、`requests.py`、`errors.py`、`docs/api.md` |
+| 改协议/接口 | `src/litegm/api.py`、`video.py`、`audio.py`、`requests.py`、`errors.py`、`docs/api.md`、`docs_discovery.py` |
+| 改 agent 接入文档 | `src/litegm/docs_discovery.py`（`/llms.txt`、`/openapi.json` 增强、Swagger 页面）、`docs/api.md`、`docs/usage.md` §5.1 |
 | 改执行流程 | `src/litegm/engine.py`、`workflow.py`、`comfy.py`、`docs/design.md` |
 | 改存储/保留 | `src/litegm/storage.py`、`store.py`、`config.py`（`StorageConfig`） |
 | 改管理台后端 | `src/litegm/admin.py`、`web/src/api.ts` |
@@ -53,6 +54,7 @@ src/litegm/
   auth.py           Bearer/Basic 与签名会话
   errors.py         错误层级 → OpenAI 错误形状
   observability.py  结构化日志中间件、/metrics、/health/live|ready
+  docs_discovery.py 发现文档：动态 /llms.txt、OpenAPI 增强、Swagger UI 页面
 web/src/            管理台（React 19 + TS strict + Tailwind；见 docs/development.md §4）
 tests/              单元与集成测试（integration 标记默认跳过）
 scripts/            截图、UTF-8 修复、文档链接校验、真实后端验证
@@ -81,6 +83,8 @@ docs/               用户/开发者文档与 changelog（每个里程碑必须�
 7. **不改无关文件**：不要重排格式、不要顺手改其它模块；新增依赖需有充分理由（当前
    Python 依赖由 pixi 管理，前端无额外依赖）。
 8. **密钥不入库**：配置用 `env:LITEGM_MASTER_KEY`；本地 `.env` 已被忽略。
+9. **发现文档同步**：新增或修改协议端点时，必须同步 `docs_discovery.py`（`llms_txt`、
+   `_ENDPOINT_DOCS`）与 `docs/api.md`；`/llms.txt` 内容只能来自生效配置，不得写死别名。
 
 ---
 

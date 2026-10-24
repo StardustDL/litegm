@@ -96,6 +96,7 @@ litegm/
 | `auth.py` | 79 | Bearer 与 Basic 鉴权、签名会话 Cookie | `Authenticator` |
 | `errors.py` | 74 | 错误层级与 OpenAI 错误形状映射 | `LiteGMError` 及各子类 |
 | `observability.py` | 181 | 结构化访问日志（ASGI 中间件）、Prometheus `/metrics`、存活/就绪探针 | `RequestLoggingMiddleware`、`METRICS` |
+| `docs_discovery.py` | — | 发现文档：按当前配置动态生成 `/llms.txt`、增强 `/openapi.json`、Swagger UI 页面 | `llms_txt`、`openapi_extras`、`swagger_html` |
 
 ### 3.1 关键机制与修改入口
 
@@ -109,6 +110,7 @@ litegm/
 | 调整存储保留/清理 | `storage.py`、`config.py` 的 `StorageConfig` |
 | 管理台新增字段或接口 | `admin.py`（会话校验、`_task_dict` 等），并同步 `web/src/api.ts` |
 | 前端界面 | `web/src/`（见 §4） |
+| 新增协议端点或修改端点语义 | 同步更新 `docs/api.md` 与 `docs_discovery.py` 的 `llms_txt`（agent 读的就是它）；端点说明可加入 `_ENDPOINT_DOCS` |
 
 ### 3.2 约定
 
@@ -117,6 +119,8 @@ litegm/
   避免无效请求占用 GPU。
 - 任务执行过程必须写事件（`store.add_event`），审计信息不可省略。
 - 配置热载只允许 `tasks`/`routing`/`backends`；`server`/`auth`/`storage` 变更需重启。
+- 发现文档（`/llms.txt`、`/openapi.json`）必须从生效配置生成，不得写死模型别名；新增
+  端点时同步扩展 `docs_discovery.py`，并在 `tests/test_docs_discovery.py` 中加断言。
 
 ---
 
@@ -168,6 +172,7 @@ litegm/
 | `tests/test_audio.py` | 音频协议 |
 | `tests/test_storage.py` | 存储治理、保留与清理 |
 | `tests/test_v3_ops.py` | 可观测性、热载、运维接口 |
+| `tests/test_docs_discovery.py` | `/llms.txt` 结构、别名与约束来自配置、不泄露密钥；`/openapi.json` 增强与 Swagger 页面 |
 | `tests/test_admin_ui_support.py` | 缩略图、列表预览字段、`duration_s`、GZip、静态缓存头 |
 | `tests/test_integration.py` | 真实 ComfyUI 集成（标记 `integration`，默认跳过） |
 | `tests/test_openai_sdk.py` | 官方 OpenAI SDK 调用验证 |

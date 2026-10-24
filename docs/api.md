@@ -126,6 +126,41 @@ prompt 中用 `<image1>`、`<image2>`… 指代。
 原有字段不变。响应体 ≥1 KB 时按 `Accept-Encoding` 压缩，`/admin/assets/*` 的哈希文件名
 返回 `immutable` 缓存头，`index.html` 为 `no-cache`。
 
+## 发现与文档端点（v4.6）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/llms.txt` | 面向 AI agent 的接入说明（Markdown，llmstxt.org 布局），**由当前生效配置动态生成** |
+| GET | `/swagger-ui`（别名 `/docs`） | Swagger UI 交互式文档页，可 Authorize 填入 master key 直接试调用 |
+| GET | `/openapi.json` | OpenAPI 3 文档：servers、bearer securityScheme、关键端点说明与请求示例 |
+
+这三个端点**无需 Bearer**：它们只描述 API，不执行调用；响应中也不会出现 master key
+（`llms.txt` 里只有 `<master_key>` 占位符）。`llms.txt` 与 `openapi.json` 按请求实时生成，
+因此热载配置或重启后内容立即反映当前别名与约束。
+
+`/llms.txt` 的章节结构：
+
+| 章节 | 内容 |
+|------|------|
+| Start here | Swagger UI、OpenAPI、`/v1/models`、`/v1/health`、本文件的绝对链接 |
+| Authentication | Bearer master key；鉴权关闭时的行为 |
+| Quick start | curl 文生图/图生图、OpenAI SDK（Python/JS）示例 |
+| Models | 当前部署每个别名的 task、尺寸/时长约束、可接受图片数、回退链；视频族路由表 |
+| Image / Video / Audio API | 端点清单与关键语义（同步超时、签名链接、异步轮询） |
+| Async tasks and polling | `GET /v1/tasks/{id}`、`GET /v1/files/{id}`、推荐轮询节奏与保留期 |
+| Errors | HTTP 状态与错误码对照（与下方错误码表一致） |
+| Operational endpoints | `/health/live`、`/health/ready`、`/metrics`、管理台 |
+
+### 给 agent 的最小接入流程
+
+1. `GET /llms.txt` —— 读取本部署的别名、约束与调用示例（无需鉴权）。
+2. `GET /v1/models`（带 Bearer）—— 拿到实际可用的 `id` 与 `capabilities`；**不要猜测模型名**。
+3. 按任务类型选端点：图像走 `/v1/images*`（同步），视频 `/v1/videos`、音频
+   `/v1/audio/generations`（异步）。
+4. 图像调用若返回 504，用响应头 `X-Litegm-Task-Id` 轮询 `GET /v1/tasks/{id}`；
+   异步任务按 2–5 秒退避轮询，完成后下载 `/content`。
+5. 需要机器可读 schema 时用 `/openapi.json`（可直接生成工具定义或客户端）。
+
 ## GET /v1/tasks/{id}
 
 非标扩展：同步超时后取回任务状态与产物链接。

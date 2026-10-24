@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { api, TaskSummary } from "./api";
+import { api, API_DOCS_URL, absoluteUrl, LLMS_TXT_URL, TaskSummary } from "./api";
 import { fmtRelative, shortId, statusMeta, taskThumb, taskTypeMeta, truncate } from "./format";
 import {
   IconAlert,
+  IconBook,
   IconChip,
   IconCommand,
+  IconExternal,
   IconGallery,
   IconKeyboard,
   IconLogo,
@@ -15,6 +17,7 @@ import {
   IconPulse,
   IconSearch,
   IconSpark,
+  IconTerminal,
   IconUser,
 } from "./icons";
 import { Chip, Modal, MediaThumb, useToast } from "./ui";
@@ -275,6 +278,31 @@ export function Shell({
               />
               {live ? "实时" : "已暂停"}
             </button>
+            {/* Discovery entry points: hand the llms.txt link to an agent so it can
+                learn this deployment's aliases and limits on its own. */}
+            <a
+              className="hidden items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-2xs font-medium text-fg-300 transition-colors hover:border-azure-500/30 hover:text-azure-300 sm:flex"
+              href={API_DOCS_URL}
+              target="_blank"
+              rel="noreferrer"
+              title="Swagger UI：可直接试调用（Authorize 填 master key）"
+            >
+              <IconBook size={14} />
+              API 文档
+            </a>
+            <button
+              className="hidden items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-2xs font-medium text-fg-300 transition-colors hover:border-violet-500/30 hover:text-violet-300 md:flex"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(absoluteUrl(LLMS_TXT_URL))
+                  .then(() => toast.push("success", "已复制 llms.txt 链接，可直接交给 agent"))
+                  .catch(() => toast.push("info", absoluteUrl(LLMS_TXT_URL)));
+              }}
+              title={`复制 agent 接入链接：${absoluteUrl(LLMS_TXT_URL)}`}
+            >
+              <IconTerminal size={14} />
+              llms.txt
+            </button>
           </div>
         </header>
 
@@ -328,6 +356,7 @@ function CommandPalette({
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   useEffect(() => {
     if (!open) return;
@@ -372,6 +401,28 @@ function CommandPalette({
           onNavigate("system");
         },
       },
+      {
+        id: "act-docs",
+        label: "打开 API 文档",
+        hint: "Swagger UI，可 Authorize 后直接试调用",
+        group: "接入",
+        icon: <IconBook size={16} />,
+        run: () => window.open(API_DOCS_URL, "_blank", "noreferrer"),
+      },
+      {
+        id: "act-llms",
+        label: "复制 llms.txt 链接",
+        hint: "把该链接交给 agent 即可自助接入",
+        group: "接入",
+        icon: <IconTerminal size={16} />,
+        run: () => {
+          const url = absoluteUrl(LLMS_TXT_URL);
+          void navigator.clipboard
+            ?.writeText(url)
+            .then(() => toast.push("success", "已复制 llms.txt 链接", url))
+            .catch(() => toast.push("info", url));
+        },
+      },
     ];
     const taskItems: PaletteItem[] = tasks.map((t) => ({
       id: `task-${t.id}`,
@@ -399,7 +450,7 @@ function CommandPalette({
           i.group.toLowerCase().includes(needle),
       )
       .slice(0, 24);
-  }, [q, tasks, onNavigate]);
+  }, [q, tasks, onNavigate, toast]);
 
   useEffect(() => {
     setSel(0);

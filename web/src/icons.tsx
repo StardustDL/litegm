@@ -433,6 +433,13 @@ export const IconPalette = (p: IconProps) => (
   </Svg>
 );
 
+export const IconBook = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4.2 5.2a1.8 1.8 0 0 1 1.8-1.8h4.2v15.4H6a1.8 1.8 0 0 0-1.8 1.8Z" />
+    <path d="M19.8 5.2a1.8 1.8 0 0 0-1.8-1.8h-4.2v15.4H18a1.8 1.8 0 0 1 1.8 1.8Z" />
+  </Svg>
+);
+
 export const IconTerminal = (p: IconProps) => (
   <Svg {...p}>
     <rect x="3.2" y="4.4" width="17.6" height="15.2" rx="2.4" />

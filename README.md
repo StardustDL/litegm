@@ -27,12 +27,17 @@ OpenAI SDK / curl  ──►  litegm 网关  ──►  ComfyUI 后端（一台�
 | 音频生成 | `POST /v1/audio/generations` → `GET /v1/audio/{id}` → `/content` | 自定义异步扩展：音乐描述 + 歌词 |
 | 模型清单 | `GET /v1/models` | 返回别名与能力（是否可带图、是否任务族等） |
 | 签名下载 | `GET /v1/files/{id}` | `response_format=url` 时返回带过期时间的链接 |
+| 接入文档（agent） | `GET /llms.txt` | 由当前配置动态生成：别名、约束、示例、异步协议、错误码 |
+| 交互式文档 | `GET /swagger-ui`（`/docs` 同义）、`GET /openapi.json` | Swagger UI 可直接 Authorize 试调用；OpenAPI 供生成客户端/工具定义 |
 
 - 兼容官方 OpenAI SDK：把 `base_url` 指向网关、`api_key` 设为 master key 即可。
 - 视频支持**任务族**：以族名（如 `minimax-h3`）调用时，网关根据实际提供的输入字段
   路由到 t2v / i2v / r2v，并在响应中如实回显实际执行的变体。
 - 图像接口为同步语义；超过 `server.sync_timeout_s` 返回 `504` 并带
   `X-Litegm-Task-Id`，任务继续执行，可用 `GET /v1/tasks/{id}` 取回。
+- **给 agent 接入**：把 `http://<你的地址>:8080/llms.txt` 交给 agent（或作为上下文/MCP
+  工具的入口链接），它即可读到本部署的真实别名与调用方式；浏览器打开 `/swagger-ui`
+  可手动试调用。这两个端点无需鉴权，也不包含 master key 本身。
 
 ### 管理控制台（`/admin`）
 

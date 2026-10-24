@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError as PydanticValidationError
 from starlette.middleware.gzip import GZipMiddleware
@@ -23,6 +23,7 @@ from .audio import router as audio_router
 from .auth import Authenticator
 from .backends import BackendRegistry
 from .config import Config, load_config
+from .docs_discovery import llms_txt, openapi_extras, swagger_html
 from .observability import RequestLoggingMiddleware, router as observability_router
 from .video import router as video_router
 from .engine import Engine
@@ -174,6 +175,11 @@ def create_app(config: Config) -> FastAPI:
         version=__version__,
         description="OpenAI-compatible media generation gateway for ComfyUI.",
         lifespan=lifespan,
+        # Discovery routes are registered explicitly below (they are generated
+        # from live state and must stay outside the static schema).
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
     )
     app.state.config = config
     app.state.auth = state.auth
@@ -227,6 +233,33 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_router)
     app.include_router(observability_router)
 
+    # -- discovery documents for agents -------------------------------------
+    # These describe the API rather than act on it, so they need no bearer
+    # token; the master key itself is never rendered into them. Requests are
+    # answered from the live app state, so a config hot reload is reflected
+    # immediately in /llms.txt and /openapi.json.
+
+    @app.get("/llms.txt", include_in_schema=False)
+    async def _llms_txt(request: Request) -> PlainTextResponse:
+        return PlainTextResponse(
+            llms_txt(request.app.state, base_url=_request_base(request)),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.get("/swagger-ui", include_in_schema=False)
+    @app.get("/docs", include_in_schema=False)
+    async def _swagger_ui() -> HTMLResponse:
+        return HTMLResponse(
+            swagger_html(openapi_url="/openapi.json", llms_url="/llms.txt"),
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.get("/openapi.json", include_in_schema=False)
+    async def _openapi(request: Request) -> JSONResponse:
+        doc = openapi_extras(request.app, base_url=_request_base(request))
+        return JSONResponse(doc, headers={"Cache-Control": "no-cache"})
+
     # Static admin UI (built assets), served from the configured path.
     static_dir = _static_dir()
     admin_path = config.server.admin_path
@@ -238,6 +271,20 @@ def create_app(config: Config) -> FastAPI:
             return RedirectResponse(f"{admin_path}/")
 
     return app
+
+
+def _request_base(request: Request) -> str:
+    """Absolute base URL derived from the request, so links work on any port.
+
+    Mirrors ``admin._request_base_url``: the configured ``public_base_url`` is
+    only a fallback, because a deployment reachable under another host/port
+    (LAN IP, reverse proxy, several instances) must not hand out unusable links.
+    """
+    host = request.headers.get("host")
+    if host:
+        scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+        return f"{scheme}://{host}"
+    return str(request.app.state.config.server.public_base_url).rstrip("/")
 
 
 def _static_dir() -> Path | None:

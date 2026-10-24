@@ -141,6 +141,15 @@ export type ModelInfo = {
   capabilities: Record<string, unknown>;
 };
 
+/** Discovery documents served by the gateway (no auth required). */
+export const API_DOCS_URL = "/swagger-ui";
+export const LLMS_TXT_URL = "/llms.txt";
+
+/** Absolute URL for a same-origin path, so links can be handed to an agent. */
+export function absoluteUrl(path: string): string {
+  return `${window.location.origin}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export type TaskQuery = {
   limit?: number;
   offset?: number;
