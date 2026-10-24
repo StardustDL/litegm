@@ -1,0 +1,429 @@
+# litegm configuration
+#
+# Everything specific to a ComfyUI deployment (host, workflows, model aliases,
+# parameter mapping) lives here — the gateway code has no knowledge of any of it.
+#
+# Secrets can be written as "env:VAR_NAME" to be read from the environment.
+
+server:
+  # 0.0.0.0 监听所有网卡，局域网内其他设备可访问；如需仅本机访问改回 127.0.0.1
+  host: 0.0.0.0
+  port: 8080
+  # 供 response_format=url 生成的下载链接使用；局域网访问时请改成这台机器的局域网 IP，
+  # 例如 http://192.168.1.x:8080
+  public_base_url: http://127.0.0.1:8080
+  sync_timeout_s: 600
+  admin_path: /admin
+  log_level: info
+
+auth:
+  username: admin
+  master_key: "env:LITEGM_MASTER_KEY"
+  # 本地开发/截图时可设为 false（或环境变量 LITEGM_AUTH_DISABLED=1）关闭鉴权；
+  # 共享或公网部署请保持 true。
+  enabled: true
+
+storage:
+  root: ./data
+  artifact_ttl_days: 30
+  download_url_ttl_s: 3600
+  # 以下为 v3 存储治理项，缺省值如下（可按需开启磁盘上限）：
+  # failed_retention_days: 60   # 失败/取消任务的产物保留更久，缺省为 TTL 的 2 倍
+  # max_bytes: 53687091200      # 磁盘上限；超出后按 LRU 清理最旧产物与上传
+  # sweep_interval_s: 900       # 后台清理周期
+
+backends:
+  # 指向你自己的 ComfyUI 实例（默认按本机安装填写）。
+  # 若 ComfyUI 跑在别的机器上，把 base_url 改成那台机器的地址
+  - id: gpu-1
+    base_url: http://127.0.0.1:8188
+    concurrency: 1
+    timeout_s: 1800
+    tags: [image]
+
+# 通用图像模型：同一个别名同时提供文生图与图生图（图像编辑）。
+# 路由依据请求是否携带图片：带图 → 走 tasks.image.edit 下同名别名；不带图 → 走 tasks.image.generate。
+# 使用方式：POST /v1/images（JSON=文生图，multipart+image=编辑），也兼容 /v1/images/generations 与 /v1/images/edits。
+# 本示例把 Qwen Image 2.1 turbo 同时配成文生图与编辑，因此可以直接作为通用模型；
+# 换成别的模型只需改这里的别名和下方 tasks 中对应变体的声明。
+routing:
+  unified_image_models:
+    - alias: qwen-image-2.1-turbo
+      generate_task: image.generate   # 对应 tasks.image.generate 中的同名变体
+      edit_task: image.edit           # 对应 tasks.image.edit 中的同名变体
+
+  # 视频任务族：调用方可以用族名（如 minimax-h3）作为 model，网关按实际提供的
+  # 输入字段路由到具体变体——不带图 → t2v；input_reference/first_frame → i2v；
+  # reference_images[] → r2v。也可直接指定具体别名强制路由。
+  # 响应中的 model 字段始终回显实际执行的变体，requested_model 保留调用方传入值。
+  video_families:
+    - family: minimax-h3
+      task: video.generate
+      text_to_video: minimax-h3-t2v
+      image_to_video: minimax-h3-i2v
+      reference_to_video: minimax-h3-r2v
+
+tasks:
+  # ---------------------------------------------------------------- text to image
+  image.generate:
+    models:
+      - alias: qwen-image-2.1-turbo
+        backend: gpu-1
+        template: config/workflows/image_qwen_image_2_1_turbo_t2i_api.json
+        inject:
+          prompt:      { node: "471", path: inputs.prompt }
+          passthrough: { node: "474", path: inputs.on_false }
+          width:       { node: "456", path: inputs.width }
+          height:      { node: "456", path: inputs.height }
+          seed:        { node: "488", path: inputs.noise_seed }
+          prefix:      { node: "461", path: inputs.filename_prefix }
+        static:
+          "474.inputs.switch": false
+          "471.inputs.thinking": false
+        constraints:
+          size_policy: auto_or_explicit
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: 1024x1024
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+      - alias: qwen-image-2.1-turbo-pe
+        backend: gpu-1
+        template: config/workflows/image_qwen_image_2_1_turbo_t2i_api.json
+        inject:
+          prompt:      { node: "471", path: inputs.prompt }
+          width:       { node: "456", path: inputs.width }
+          height:      { node: "456", path: inputs.height }
+          seed:        { node: "488", path: inputs.noise_seed }
+          prefix:      { node: "461", path: inputs.filename_prefix }
+        static:
+          "474.inputs.switch": true
+          "471.inputs.thinking": true
+        defaults:
+          refine_prompt: true
+        constraints:
+          size_policy: auto_or_explicit
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: 1024x1024
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+      # ---- Qwen Image 2.1 base (non-distilled, 25-50 steps, RGBA output) ----
+      - alias: qwen-image-2.1
+        backend: gpu-1
+        template: config/workflows/image_qwen_image_2_1_t2i_api.json
+        inject:
+          prompt:      { node: "452", path: inputs.prompt }
+          width:       { node: "456", path: inputs.width }
+          height:      { node: "456", path: inputs.height }
+          seed:        { node: "458", path: inputs.seed }
+          steps:       { node: "458", path: inputs.steps }
+          quality_steps: { node: "458", path: inputs.steps }
+          prefix:      { node: "461", path: inputs.filename_prefix }
+        static:
+          "458.inputs.cfg": 1.0
+        constraints:
+          size_policy: auto_or_explicit
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: 1024x1024
+          quality_map:
+            low: {steps: 12}
+            medium: {steps: 25}
+            high: {steps: 40}
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+      # ---- MOSS Image (Flux2 latent, 16-multiple sizes, RGB output) ----
+      - alias: moss-image
+        backend: gpu-1
+        template: config/workflows/moss_image_text2image_api.json
+        inject:
+          prompt:      { node: "6", path: inputs.text }
+          width:       { node: "74", path: inputs.width }
+          height:      { node: "74", path: inputs.height }
+          seed:        { node: "3", path: inputs.seed }
+          steps:       { node: "3", path: inputs.steps }
+          prefix:      { node: "56", path: inputs.filename_prefix }
+        static:
+          "3.inputs.cfg": 3.0
+        constraints:
+          size_policy: auto_or_explicit
+          size_step: 16
+          min_edge: 256
+          max_edge: 4096
+          default_size: 1024x1024
+          quality_map:
+            low: {steps: 12}
+            medium: {steps: 25}
+            high: {steps: 40}
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+  # ------------------------------------------------------------------ image edit
+  image.edit:
+    models:
+      # 通用图像模型的编辑分支：与 image.generate 下的同名变体一起构成通用模型。
+      - alias: qwen-image-2.1-turbo
+        backend: gpu-1
+        template: config/workflows/image_qwen_image_2_1_turbo_edit_api.json
+        inject:
+          prompt:      { node: "500", path: inputs.prompt }
+          passthrough: { node: "484", path: inputs.on_false }
+          seed:        { node: "504", path: inputs.noise_seed }
+          prefix:      { node: "461", path: inputs.filename_prefix }
+        static:
+          "484.inputs.switch": false
+          "500.inputs.thinking": false
+          "468.inputs.switch": false
+        image_slots:
+          target:    { node: "470" }
+          reference: { start_node: "475", extra_node_base: 510, optional: true }
+          batch:     { node: "485" }
+        encoder_node: "474"
+        mask_policy: unsupported
+        constraints:
+          size_policy: auto
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: auto
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+      - alias: qwen-image-2.1-turbo-edit
+        backend: gpu-1
+        template: config/workflows/image_qwen_image_2_1_turbo_edit_api.json
+        inject:
+          prompt:      { node: "500", path: inputs.prompt }
+          passthrough: { node: "484", path: inputs.on_false }
+          seed:        { node: "504", path: inputs.noise_seed }
+          prefix:      { node: "461", path: inputs.filename_prefix }
+        static:
+          "484.inputs.switch": false
+          "500.inputs.thinking": false
+          "468.inputs.switch": false
+        image_slots:
+          target:    { node: "470" }
+          reference: { start_node: "475", extra_node_base: 510, optional: true }
+          batch:     { node: "485" }
+        encoder_node: "474"
+        mask_policy: unsupported
+        constraints:
+          size_policy: auto
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: auto
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+      - alias: qwen-image-2.1-turbo-edit-pe
+        backend: gpu-1
+        template: config/workflows/image_qwen_image_2_1_turbo_edit_api.json
+        inject:
+          prompt:      { node: "500", path: inputs.prompt }
+          seed:        { node: "504", path: inputs.noise_seed }
+          prefix:      { node: "461", path: inputs.filename_prefix }
+        static:
+          "484.inputs.switch": true
+          "500.inputs.thinking": true
+          "468.inputs.switch": false
+        defaults:
+          refine_prompt: true
+        image_slots:
+          target:    { node: "470" }
+          reference: { start_node: "475", extra_node_base: 510 }
+          batch:     { node: "485" }
+        encoder_node: "474"
+        mask_policy: unsupported
+        constraints:
+          size_policy: auto
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: auto
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+      # ---- Qwen Image 2.1 base edit (25-50 steps, no prompt enhancer) ----
+      - alias: qwen-image-2.1-edit
+        backend: gpu-1
+        template: config/workflows/image_qwen_image_2_1_image_edit_api.json
+        inject:
+          prompt:      { node: "474", path: inputs.prompt }
+          seed:        { node: "458", path: inputs.seed }
+          steps:       { node: "458", path: inputs.steps }
+          quality_steps: { node: "458", path: inputs.steps }
+          prefix:      { node: "461", path: inputs.filename_prefix }
+        static:
+          "458.inputs.cfg": 1.0
+          "468.inputs.switch": false
+        image_slots:
+          target:    { node: "470" }
+          # 模板自带的参考图节点（475）在单图编辑时会被丢弃，多图时才接线
+          reference: { start_node: "475", extra_node_base: 476, optional: true }
+        encoder_node: "474"
+        mask_policy: unsupported
+        constraints:
+          size_policy: auto
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: auto
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+  # ----------------------------------------------------------------------- video
+  # OpenAI 原生异步视频协议：POST /v1/videos → GET /v1/videos/{id} → /content
+  # 带 input_reference 时走图生视频（i2v），带多张 reference_images 走参考视频（r2v）。
+  video.generate:
+    models:
+      # ---- 文生视频 MiniMax H3 T2V ----
+      - alias: minimax-h3-t2v
+        backend: gpu-1
+        template: config/workflows/minimax_h3_t2v_api.json
+        inject:
+          prompt:      { node: "105:104", path: inputs.prompt }
+          seconds:     { node: "105:111", path: inputs.value }
+          seed:        { node: "105:15", path: inputs.noise_seed }
+          steps:       { node: "105:9", path: inputs.steps }
+          prefix:      { node: "92", path: inputs.filename_prefix }
+        static:
+          "105:104.inputs.width": 864
+          "105:104.inputs.height": 480
+          "92.inputs.format": auto
+          "92.inputs.format.codec": auto
+          "105:13.inputs.clip_name": qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+          "105:6.inputs.unet_name": minimax_h3_fl2va_pruned_fp8_scaled.safetensors
+        constraints:
+          size_policy: auto_or_explicit
+          size_step: 32
+          min_edge: 256
+          max_edge: 1344
+          default_size: 864x480
+          n_max: 1
+          output_formats: [mp4, webm]
+          backgrounds: [opaque, auto]
+          duration_min: 1.0
+          duration_max: 15.0
+          duration_default: 2.0
+          duration_step: 17/24
+
+      # ---- 图生视频 MiniMax H3 I2V（首帧） ----
+      - alias: minimax-h3-i2v
+        backend: gpu-1
+        template: config/workflows/video_minimax_h3_i2v_api.json
+        inject:
+          prompt:      { node: "105:104", path: inputs.prompt }
+          seconds:     { node: "105:111", path: inputs.value }
+          seed:        { node: "105:15", path: inputs.noise_seed }
+          steps:       { node: "105:9", path: inputs.steps }
+          prefix:      { node: "92", path: inputs.filename_prefix }
+        static:
+          "92.inputs.format": auto
+          "92.inputs.format.codec": auto
+          "105:13.inputs.clip_name": qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+          "105:6.inputs.unet_name": minimax_h3_fl2va_pruned_fp8_scaled.safetensors
+          "119.inputs.megapixels": 0.4
+        image_slots:
+          target: { node: "114" }
+        constraints:
+          size_policy: auto_or_explicit
+          size_step: 32
+          min_edge: 256
+          max_edge: 1344
+          default_size: 864x480
+          n_max: 1
+          output_formats: [mp4, webm]
+          backgrounds: [opaque, auto]
+          duration_min: 1.0
+          duration_max: 15.0
+          duration_default: 2.0
+          duration_step: 17/24
+
+      # ---- 参考生视频 MiniMax H3 R2V（多图参考） ----
+      - alias: minimax-h3-r2v
+        backend: gpu-1
+        template: config/workflows/video_minimax_h3_r2v_api.json
+        inject:
+          prompt:      { node: "136", path: inputs.prompt }
+          seconds:     { node: "132", path: inputs.value }
+          seed:        { node: "129", path: inputs.noise_seed }
+          steps:       { node: "124", path: inputs.steps }
+          prefix:      { node: "92", path: inputs.filename_prefix }
+        static:
+          "136.inputs.width": 864
+          "136.inputs.height": 480
+          "92.inputs.format": auto
+          "92.inputs.format.codec": auto
+          "128.inputs.clip_name": qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+          "127.inputs.unet_name": minimax_h3_ref2va_pruned_fp8_scaled.safetensors
+          "136.inputs.ref_image_size": match
+        image_slots:
+          target:    { node: "137" }
+          reference: { start_node: "139", extra_node_base: 140, optional: true }
+        image_targets:
+          "ref_images.ref_image_0": "137"
+          "ref_images.ref_image_1": "139"
+        constraints:
+          size_policy: auto_or_explicit
+          size_step: 32
+          min_edge: 256
+          max_edge: 1344
+          default_size: 864x480
+          n_max: 1
+          output_formats: [mp4, webm]
+          backgrounds: [opaque, auto]
+          duration_min: 1.0
+          duration_max: 15.0
+          duration_default: 2.0
+          duration_step: 17/24
+
+  # ----------------------------------------------------------------------- audio
+  # 自定义扩展（OpenAI 无稳定音频生成接口），采用与视频一致的异步任务协议：
+  # POST /v1/audio/generations → GET /v1/audio/{id} → GET /v1/audio/{id}/content
+  audio.generate:
+    models:
+      - alias: minimax-music3
+        backend: gpu-1
+        template: config/workflows/minimax_music3_t2m_api.json
+        inject:
+          prompt:      { node: "4", path: inputs.caption }
+          lyrics:      { node: "4", path: inputs.lyrics }
+          seconds:     { node: "4", path: inputs.max_duration }
+          duration:    { node: "6", path: inputs.seconds }
+          seed:        { node: "4", path: inputs.seed }
+          prefix:      { node: "9", path: inputs.filename_prefix }
+        static:
+          "4.inputs.cfg_scale": 1.7
+          "7.inputs.cfg": 1.7
+          "7.inputs.steps": 30
+          "7.inputs.sampler_name": euler
+          "7.inputs.scheduler": simple
+        constraints:
+          size_policy: auto
+          size_step: 32
+          min_edge: 256
+          max_edge: 2048
+          default_size: 1024x1024
+          n_max: 1
+          output_formats: [flac]
+          backgrounds: [opaque, auto]
+          duration_min: 5.0
+          duration_max: 300.0
+          duration_default: 30.0
+          duration_step: 1.0

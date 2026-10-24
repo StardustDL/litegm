@@ -1,0 +1,117 @@
+{
+  "451": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": { "title": "UNETLoader" }
+  },
+  "469": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "model": ["451", 0],
+      "device": "auto",
+      "dtype": "default"
+    },
+    "_meta": { "title": "QwenImage21Cache" }
+  },
+  "453": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "_meta": { "title": "CLIPLoader" }
+  },
+  "454": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "_meta": { "title": "VAELoader" }
+  },
+  "470": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "portrait_model_denim.png",
+      "upload": "image"
+    },
+    "_meta": { "title": "LoadImage (image_1 = edit target)" }
+  },
+  "475": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "clothing_light_blue_denim_shirt.png",
+      "upload": "image"
+    },
+    "_meta": { "title": "LoadImage (image_2 = reference)" }
+  },
+  "474": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "clip": ["453", 0],
+      "vae": ["454", 0],
+      "images.image_1": ["470", 0],
+      "images.image_2": ["475", 0],
+      "prompt": "Keep the character and pose in <image1> unchanged, put the shirt from <image2> on the character, preserve facial features, hair, body shape and pose, keep the original background and lighting",
+      "negative_prompt": "",
+      "resolution": 1024
+    },
+    "_meta": { "title": "TextEncodeQwenImage21" }
+  },
+  "456": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "_meta": { "title": "EmptyLatentImage (used only when custom_size=true)" }
+  },
+  "468": {
+    "class_type": "ComfySwitchNode",
+    "inputs": {
+      "switch": false,
+      "on_false": ["474", 2],
+      "on_true": ["456", 0]
+    },
+    "_meta": { "title": "custom_size switch" }
+  },
+  "458": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["469", 0],
+      "positive": ["474", 0],
+      "negative": ["474", 1],
+      "latent_image": ["468", 0],
+      "seed": 0,
+      "steps": 25,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    },
+    "_meta": { "title": "KSampler" }
+  },
+  "457": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["458", 0],
+      "vae": ["454", 0]
+    },
+    "_meta": { "title": "VAEDecode" }
+  },
+  "461": {
+    "class_type": "SaveImageAdvanced",
+    "inputs": {
+      "images": ["457", 0],
+      "filename_prefix": "Qwen_image_2.1_edit",
+      "format": "png",
+      "format.bit_depth": "8-bit",
+      "format.input_color_space": "sRGB"
+    },
+    "_meta": { "title": "SaveImageAdvanced" }
+  }
+}

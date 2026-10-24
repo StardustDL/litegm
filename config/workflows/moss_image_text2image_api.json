@@ -1,0 +1,144 @@
+{
+ "37": {
+  "class_type": "UNETLoader",
+  "inputs": {
+   "unet_name": "moss_image_sft_int8_convrot.safetensors",
+   "weight_dtype": "default"
+  },
+  "_meta": {
+   "title": "UNETLoader (MOSS)"
+  }
+ },
+ "93": {
+  "class_type": "SkipLayerGuidanceDiTSimple",
+  "inputs": {
+   "model": [
+    "37",
+    0
+   ],
+   "double_layers": "",
+   "single_layers": "22",
+   "start_percent": 0.0,
+   "end_percent": 0.5
+  },
+  "_meta": {
+   "title": "SkipLayerGuidance (SLG)"
+  }
+ },
+ "38": {
+  "class_type": "CLIPLoader",
+  "inputs": {
+   "clip_name": "qwen3.5_9b_int8_convrot.safetensors",
+   "type": "moss_image",
+   "device": "default"
+  },
+  "_meta": {
+   "title": "CLIPLoader"
+  }
+ },
+ "6": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "clip": [
+    "38",
+    0
+   ],
+   "text": "a red fox sitting in golden autumn grass, soft morning light, photorealistic"
+  },
+  "_meta": {
+   "title": "Positive Prompt"
+  }
+ },
+ "94": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "clip": [
+    "38",
+    0
+   ],
+   "text": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact, photorealistic, 3d render, clouds, wall, vertical shadow, dappled shade, tree shadow, leaf shadows, gray background, extra limbs"
+  },
+  "_meta": {
+   "title": "Negative Prompt"
+  }
+ },
+ "74": {
+  "class_type": "EmptyFlux2LatentImage",
+  "inputs": {
+   "width": 1024,
+   "height": 1024,
+   "batch_size": 1
+  },
+  "_meta": {
+   "title": "EmptyFlux2LatentImage"
+  }
+ },
+ "3": {
+  "class_type": "KSampler",
+  "inputs": {
+   "model": [
+    "93",
+    0
+   ],
+   "positive": [
+    "6",
+    0
+   ],
+   "negative": [
+    "94",
+    0
+   ],
+   "latent_image": [
+    "74",
+    0
+   ],
+   "seed": 1234,
+   "steps": 25,
+   "cfg": 3.0,
+   "sampler_name": "euler",
+   "scheduler": "sgm_uniform",
+   "denoise": 1.0
+  },
+  "_meta": {
+   "title": "KSampler"
+  }
+ },
+ "39": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "flux2-vae.safetensors"
+  },
+  "_meta": {
+   "title": "VAELoader"
+  }
+ },
+ "8": {
+  "class_type": "VAEDecode",
+  "inputs": {
+   "samples": [
+    "3",
+    0
+   ],
+   "vae": [
+    "39",
+    0
+   ]
+  },
+  "_meta": {
+   "title": "VAEDecode"
+  }
+ },
+ "56": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "8",
+    0
+   ],
+   "filename_prefix": "MOSS_image"
+  },
+  "_meta": {
+   "title": "SaveImage"
+  }
+ }
+}

@@ -1,0 +1,32 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+.cache
+.sync
+
+# real deployment configuration (git-ignored; `config/` is the committed example).
+# The leading slash keeps `web/tailwind.config.js` and `web/postcss.config.js`
+# tracked.
+/.config/
+
+# local-only notes (kept on disk, never committed)
+remote-docs/
+
+# litegm runtime data (task DB, artifacts, uploads)
+/data/
+
+# admin UI build output and dependencies
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# test scratch directories
+.test-work/
+.pytest-tmp/
+
+# local deployment secrets (docker compose reads .env)
+.env

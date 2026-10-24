@@ -1,0 +1,15 @@
+.pixi
+.cache
+data
+web/node_modules
+web/dist
+.test-work
+.pytest-tmp
+.git
+__pycache__
+*.pyc
+remote-docs
+.sync
+.env
+# real deployment config is bind-mounted, not baked into the image
+.config

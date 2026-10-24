@@ -1,0 +1,72 @@
+# Production stack for litegm.
+#
+#   LITEGM_MASTER_KEY=... docker compose up -d --build
+#
+# The gateway listens on 8080 inside the container; only that port is published
+# so the public base URL in the config matches what clients see. The real
+# configuration lives in the git-ignored ``.config/`` directory and the task
+# database in ``data/``; both are bind-mounted from the host so workflows, model
+# aliases and the database stay editable without rebuilding the image. ``config/``
+# in the repository is only an example.
+
+services:
+  litegm:
+    build:
+      context: .
+      args:
+        # Registry mirrors are used when Docker Hub/ghcr are unreachable; the
+        # defaults are the upstream images.
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        PIXI_IMAGE: ${PIXI_IMAGE:-ghcr.io/prefix-dev/pixi:0.83.0}
+    image: litegm:latest
+    container_name: litegm
+    # Starts as root only so docker-entrypoint.sh can take ownership of the
+    # bind-mounted ./data and ./config, then drops to UID 10001 before serving.
+    # Without this, a ./data directory owned by root makes SQLite fail with
+    # "unable to open database file". To force non-root from the start, set
+    # `user: "10001:10001"` and pre-create ./data with that ownership.
+    ports:
+      - "8080:8080"
+    environment:
+      # auth.master_key is "env:LITEGM_MASTER_KEY" in the config; the value is
+      # read from the host environment (or .env) and never baked into the image.
+      LITEGM_MASTER_KEY: ${LITEGM_MASTER_KEY:?set LITEGM_MASTER_KEY}
+    volumes:
+      - ./.config:/app/.config
+      - ./config:/app/config
+      - ./data:/app/data
+    command:
+      - pixi
+      - run
+      - --environment
+      - default
+      - python
+      - -m
+      - litegm.cli
+      - serve
+      - --config
+      - /app/.config/litegm.yaml
+      - --base-dir
+      - /app
+      # --host/--port override server.host/server.port without editing the config.
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    restart: unless-stopped
+    healthcheck:
+      # The runtime image has no ``python`` on PATH (it comes from the pixi
+      # environment), so the probe goes through ``pixi run`` like the CMD does.
+      test:
+        - CMD
+        - pixi
+        - run
+        - --environment
+        - default
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=3).status==200 else 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
