@@ -51,6 +51,9 @@ routing:
     - alias: qwen-image-2.1-turbo
       generate_task: image.generate   # 对应 tasks.image.generate 中的同名变体
       edit_task: image.edit           # 对应 tasks.image.edit 中的同名变体
+    - alias: minimax-h3-image
+      generate_task: image.generate   # 对应 tasks.image.generate 中的同名变体
+      edit_task: image.edit           # 对应 tasks.image.edit 中的同名变体
 
   # 视频任务族：调用方可以用族名（如 minimax-h3）作为 model，网关按实际提供的
   # 输入字段路由到具体变体——不带图 → t2v；input_reference/first_frame → i2v；
@@ -164,6 +167,33 @@ tasks:
           quality_map:
             low: {steps: 12}
             medium: {steps: 25}
+            high: {steps: 40}
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+      # ---- MiniMax H3 Image 文生图（MiniMaxH3ImageConditioning + BasicGuider，
+      #      H3 图像模型自带 prompt 理解，无负面词/cfg；输出尺寸为 32 的倍数） ----
+      - alias: minimax-h3-image
+        backend: gpu-1
+        template: config/workflows/minimax_h3_image_t2i_api.json
+        inject:
+          prompt:      { node: "4", path: inputs.prompt }
+          width:       { node: "4", path: inputs.width }
+          height:      { node: "4", path: inputs.height }
+          seed:        { node: "8", path: inputs.noise_seed }
+          steps:       { node: "7", path: inputs.steps }
+          quality_steps: { node: "7", path: inputs.steps }
+          prefix:      { node: "11", path: inputs.filename_prefix }
+        constraints:
+          size_policy: auto_or_explicit
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: 1024x1024
+          quality_map:
+            low: {steps: 12}
+            medium: {steps: 24}
             high: {steps: 40}
           n_max: 4
           output_formats: [png, webp, jpeg]
@@ -283,6 +313,36 @@ tasks:
           min_edge: 256
           max_edge: 4096
           default_size: auto
+          n_max: 4
+          output_formats: [png, webp, jpeg]
+          backgrounds: [opaque, auto]
+
+      # ---- MiniMax H3 Image 图像编辑：输出尺寸跟随输入图（width/height=0），
+      #      prompt 中用 <Picture 1>、<Picture 2> 指代上传的图片 ----
+      - alias: minimax-h3-image
+        backend: gpu-1
+        template: config/workflows/minimax_h3_image_edit_api.json
+        inject:
+          prompt:      { node: "4", path: inputs.prompt }
+          seed:        { node: "8", path: inputs.noise_seed }
+          steps:       { node: "7", path: inputs.steps }
+          quality_steps: { node: "7", path: inputs.steps }
+          prefix:      { node: "11", path: inputs.filename_prefix }
+        image_slots:
+          target:    { node: "20" }
+          reference: { start_node: "21", extra_node_base: 22, optional: true }
+        encoder_node: "4"
+        mask_policy: unsupported
+        constraints:
+          size_policy: auto
+          size_step: 32
+          min_edge: 256
+          max_edge: 4096
+          default_size: auto
+          quality_map:
+            low: {steps: 12}
+            medium: {steps: 24}
+            high: {steps: 40}
           n_max: 4
           output_formats: [png, webp, jpeg]
           backgrounds: [opaque, auto]

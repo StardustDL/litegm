@@ -95,6 +95,12 @@ with open("person.png", "rb") as fh:
 | `moss-image` | 文生图 | MOSS Image，尺寸需 16 的倍数，支持负面词 |
 | `qwen-image-2.1-turbo-edit` / `-pe` | 图片编辑 | 默认编辑；`-pe` 启用编辑提示词增强 |
 | `qwen-image-2.1-edit` | 图片编辑 | base 权重编辑，单图/多图均可 |
+| `minimax-h3-image` | 文生图 + 图像编辑 | MiniMax H3 Image，尺寸需 32 的倍数；编辑时输出尺寸跟随输入图，prompt 用 `<Picture 1>`、`<Picture 2>` 指代输入图；不支持负面词、cfg 与 mask |
+
+`minimax-h3-image` 需要目标 ComfyUI 安装 H3 图像权重（`minimax_h3_image_pruned_*`）、
+`minimax_h3_image_vae_fp16.safetensors` 与 `qwen3vl_32b_minimax_h3_*` 文本编码器，
+并支持 `MiniMaxH3ImageConditioning` 节点；缺任意一项时该别名会在 `pixi run check`
+与提交前校验中被拒绝，不影响其它模型。
 
 别名完全由配置决定，增删模型只需改 `.config/litegm.yaml`，无需改代码。
 
